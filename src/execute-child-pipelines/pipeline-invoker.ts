@@ -7,7 +7,7 @@ import {
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { fromSSO } from '@aws-sdk/credential-providers';
 import { Minimatch } from 'minimatch';
-import { AppMap } from '../types';
+import { IAppMap } from '../types';
 
 /**
  * Overview: This script is used to invoke pipelines that have been affected by a change based on the appMap, which is generated from the childPipeline construct.
@@ -88,7 +88,7 @@ export class PipelineInvoker {
   };
 
   getPipelinesToInvoke = (
-    appMap: AppMap,
+    appMap: IAppMap,
     changedFiles: string[],
     changedProjects: string[],
   ): string[] => {
@@ -121,7 +121,7 @@ export class PipelineInvoker {
     return Array.from(pipelinesToInvoke);
   };
 
-  private getAppMap = (): AppMap => {
+  private getAppMap = (): IAppMap => {
     // read the appMap.json file
     const fileName = `dist/childPipeline.appMap.json`;
 

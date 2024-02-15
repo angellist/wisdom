@@ -1,9 +1,9 @@
 import { PipelineInvoker } from './pipeline-invoker';
-import { AppMap } from '../types';
+import { IAppMap } from '../types';
 
 describe('PipelineInvoker', () => {
   let pipelineInvoke: PipelineInvoker;
-  let mockAppMap: AppMap;
+  let mockAppMap: IAppMap;
 
   beforeEach(() => {
     pipelineInvoke = new PipelineInvoker();

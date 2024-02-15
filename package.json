@@ -63,12 +63,18 @@
   },
   "dependencies": {
     "@aws-sdk/client-codepipeline": "^3.514.0",
+    "@aws-sdk/credential-provider-node": "^3.514.0",
     "@aws-sdk/credential-providers": "^3.514.0",
-    "aws-cdk-lib": "^2.96.0"
+    "aws-cdk-lib": "^2.96.0",
+    "minimatch": "^9.0.3",
+    "yargs": "^17.7.2"
   },
   "bundledDependencies": [
     "@aws-sdk/client-codepipeline",
-    "@aws-sdk/credential-providers"
+    "@aws-sdk/credential-provider-node",
+    "@aws-sdk/credential-providers",
+    "minimatch",
+    "yargs"
   ],
   "keywords": [
     "cdk"

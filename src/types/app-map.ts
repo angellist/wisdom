@@ -1,4 +1,4 @@
-export interface AppMap {
+export interface IAppMap {
   pathsToPipelines: Record<string, string[]>;
   projectsToPipelines: Record<string, string[]>;
 }

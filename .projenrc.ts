@@ -1,7 +1,5 @@
-import {
-  awscdk, javascript
-} from 'projen';
-import { Job } from 'projen/lib/github/workflows-model';
+import { awscdk, javascript } from 'projen';
+import { Job, JobPermission } from 'projen/lib/github/workflows-model';
 
 const project = new awscdk.AwsCdkConstructLibrary({
   author: 'William Czubakowski',
@@ -30,6 +28,7 @@ const project = new awscdk.AwsCdkConstructLibrary({
     dirs: ['src', 'test', 'example'],
   },
   tsconfigDev: {
+    include: ['src', 'test', 'example'],
     compilerOptions: {
       rootDir: 'src',
       outDir: 'dist',
@@ -40,12 +39,13 @@ const project = new awscdk.AwsCdkConstructLibrary({
     '@aws-sdk/client-codepipeline',
     'aws-cdk-lib@^2.96.0',
   ],
-  peerDeps: [
-    'aws-cdk-lib@^2.96.0',
-  ],
+  peerDeps: ['aws-cdk-lib@^2.96.0'],
   bundledDeps: [
     '@aws-sdk/credential-providers',
     '@aws-sdk/client-codepipeline',
+    '@aws-sdk/credential-provider-node',
+    'yargs',
+    'minimatch',
   ],
   // jest config
   jestOptions: {
@@ -63,40 +63,42 @@ const project = new awscdk.AwsCdkConstructLibrary({
 project.addScripts({
   'execute-child-pipelines': 'npx ts-node src/execute-child-pipelines/index.ts',
 });
-const workflow = project.github!.workflows.find((wf) => wf.name === 'build')!;
+const buildWorkflow = project.github!.workflows.find(
+  (wf) => wf.name === 'build',
+)!;
 
-const existingJob = workflow.getJob('build')! as Job;
+const buildJob = buildWorkflow.getJob('build')! as Job;
 
-workflow.updateJob('build', {
-  ...existingJob,
+buildWorkflow.updateJob('build', {
+  ...buildJob,
   steps: [
     {
       name: 'Checkout',
       uses: 'actions/checkout@v4',
       with: {
         ref: '${{ github.event.pull_request.head.ref }}',
-        repository: '${{ github.event.pull_request.head.repo.full_name }}'
-      }
+        repository: '${{ github.event.pull_request.head.repo.full_name }}',
+      },
     },
     {
       name: 'Setup Node.js',
       uses: 'actions/setup-node@v4',
       with: {
-        'node-version': '18.x'
-      }
+        'node-version': '18.x',
+      },
     },
     {
       name: 'Install dependencies',
-      run: 'npm install -g bun && bun install'
+      run: 'npm install -g bun && bun install',
     },
     {
       name: 'build',
-      run: 'npx projen build'
+      run: 'npx projen build',
     },
     {
       name: 'Find mutations',
       id: 'self_mutation',
-      run: `git add . && git diff --staged --patch --exit-code > .repo.patch || echo "self_mutation_happened=true" >> $GITHUB_ENV`
+      run: `git add . && git diff --staged --patch --exit-code > .repo.patch || echo "self_mutation_happened=true" >> $GITHUB_ENV`,
     },
     {
       name: 'Upload patch',
@@ -105,18 +107,18 @@ workflow.updateJob('build', {
       with: {
         name: '.repo.patch',
         path: '.repo.patch',
-        overwrite: 'true'
-      }
+        overwrite: true,
+      },
     },
     {
       name: 'Fail build on mutation',
       if: 'steps.self_mutation.outputs.self_mutation_happened',
-      run: `echo "::error::Files were changed during build (see build log). If this was triggered from a fork, you will need to update your branch." && cat .repo.patch && exit 1`
+      run: `echo "::error::Files were changed during build (see build log). If this was triggered from a fork, you will need to update your branch." && cat .repo.patch && exit 1`,
     },
     {
       name: 'Backup artifact permissions',
       run: 'cd dist && getfacl -R . > permissions-backup.acl',
-      continueOnError: true
+      continueOnError: true,
     },
     {
       name: 'Upload artifact',
@@ -124,43 +126,127 @@ workflow.updateJob('build', {
       with: {
         name: 'build-artifact',
         path: 'dist',
-        overwrite: 'true'
-      }
-    }
-  ]
+        overwrite: true,
+      },
+    },
+  ],
 });
 
+const releaseWorkflow = project.github?.workflows.find(
+  (w) => w.name === 'release',
+)!;
 
-// // there's a bug in the .github/workflows such that bun is not installed prior to running bun install.
-// // this looks for "bun install" in all files in .github/workflows and replaces it with "npm i -g bun && bun install"
-// // It skips replacing where the line already includes npm i -g bun to avoid adding it multiple times
-// const buildWorkflow = project.tryFindObjectFile('.github/workflows/build.yml');
-// // packageJson.patch(JsonPatch.add('/author/name', 'A. Mused'));
-// /*
-// obs:
-//   build:
-//     runs-on: ubuntu-latest
-//     permissions:
-//       contents: write
-//     outputs:
-//       self_mutation_happened: ${{ steps.self_mutation.outputs.self_mutation_happened }}
-//     env:
-//       CI: "true"
-//     steps:
-//       - name: Checkout
-//         uses: actions/checkout@v4
-//         with:
-//           ref: ${{ github.event.pull_request.head.ref }}
-//           repository: ${{ github.event.pull_request.head.repo.full_name }}
-//       - name: Setup Node.js
-//         uses: actions/setup-node@v4
-//         with:
-//           node-version: 18.x
-//       - name: Install dependencies
-//         run: bun install
-//         */
-// if (buildWorkflow) {
-//   buildWorkflow.patch(JsonPatch.add('jobs/build/steps', 'npm i -g bun'));
-// }
+const releaseJob = releaseWorkflow.getJob('release')! as Job;
+
+releaseWorkflow.updateJob('release', {
+  ...releaseJob,
+  steps: [
+    {
+      name: 'Checkout',
+      uses: 'actions/checkout@v4',
+      with: {
+        'fetch-depth': 0,
+      },
+    },
+    {
+      name: 'Set git identity',
+      run: `git config user.name "github-actions"
+git config user.email "github-actions@github.com"`,
+    },
+    {
+      name: 'Setup Node.js',
+      uses: 'actions/setup-node@v4',
+      with: {
+        'node-version': '18.x',
+      },
+    },
+    {
+      name: 'Install dependencies',
+      run: 'npm install -g bun && bun install --frozen-lockfile',
+    },
+    {
+      name: 'release',
+      run: 'npx projen release',
+    },
+    {
+      name: 'Check if version has already been tagged',
+      id: 'check_tag_exists',
+      run: `TAG=$(cat dist/dist/releasetag.txt)
+([ ! -z "$TAG" ] && git ls-remote -q --exit-code --tags origin $TAG && (echo "exists=true" >> $GITHUB_OUTPUT)) || (echo "exists=false" >> $GITHUB_OUTPUT)
+cat $GITHUB_OUTPUT`,
+    },
+    {
+      name: 'Check for new commits',
+      id: 'git_remote',
+      run:
+        `echo "latest_commit=$(git ls-remote origin -h` +
+        ' ${{ github.ref }} ' +
+        `| cut -f1)" >> $GITHUB_OUTPUT
+cat $GITHUB_OUTPUT`,
+    },
+    {
+      name: 'Backup artifact permissions',
+      if: '${{ steps.git_remote.outputs.latest_commit == github.sha }}',
+      run: 'cd dist && getfacl -R . > permissions-backup.acl',
+      continueOnError: true,
+    },
+    {
+      name: 'Upload artifact',
+      if: '${{ steps.git_remote.outputs.latest_commit == github.sha }}',
+      uses: 'actions/upload-artifact@v4',
+      with: {
+        name: 'build-artifact',
+        path: 'dist',
+        overwrite: true,
+      },
+    },
+  ],
+});
+
+const releaseNPMJob = releaseWorkflow.getJob('release_npm')! as Job;
+
+releaseWorkflow.updateJob('release_npm', {
+  ...releaseNPMJob,
+  permissions: {
+    contents: JobPermission.READ,
+  },
+  steps: [
+    {
+      name: 'Checkout',
+      uses: 'actions/checkout@v4',
+      with: {
+        'fetch-depth': 0,
+      },
+    },
+    {
+      name: 'Set git identity',
+      run: `git config user.name "github-actions"
+git config user.email "github-actions@github.com"`,
+    },
+    {
+      name: 'Setup Node.js',
+      uses: 'actions/setup-node@v4',
+      with: {
+        'node-version': '18.x',
+        'registry-url': 'https://registry.npmjs.org/',
+      },
+    },
+    {
+      name: 'Install dependencies',
+      run: 'npm install -g bun && bun install --frozen-lockfile',
+    },
+    {
+      name: 'Build and package',
+      run: 'npx projen build',
+    },
+    {
+      name: 'Publish to npm',
+      run: 'npx projen publish:js',
+      env: {
+        NODE_AUTH_TOKEN: '${{ secrets.NPM_TOKEN }}',
+      },
+    },
+  ],
+});
 
 project.synth();

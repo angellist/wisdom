@@ -1,17 +1,11 @@
 import * as fs from 'fs';
-import { Tags, CfnOutput } from 'aws-cdk-lib';
+import { Tags } from 'aws-cdk-lib';
 
-import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
-import {
-  CodePipelineProps,
-  CodePipeline,
-  CodeBuildStep,
-  StageDeployment,
-} from 'aws-cdk-lib/pipelines';
+import { CodePipelineProps, CodePipeline } from 'aws-cdk-lib/pipelines';
 import { Construct } from 'constructs';
 
 import { StripStep } from './strip-step';
-import { AppMap } from '../types';
+import { IAppMap } from '../types';
 
 //  Important: in your synth's pipelines.ConnectionSourceOptions make sure triggerOnPush is set to false!
 // Don't forget `crossAccountKeys: true` if deploying cross-account
@@ -33,9 +27,6 @@ export interface ChildPipelineProps extends CodePipelineProps {
   // if true, the assets will be stripped from the pipeline artifacts.
   // This is useful for nodejs projects where the assets are not needed for the deployment
   readonly stripAssets?: boolean;
-
-  // make pipelineName required
-  readonly pipelineName: string;
 }
 
 export class ChildPipeline extends CodePipeline {
@@ -59,7 +50,7 @@ export class ChildPipeline extends CodePipeline {
     this.parentScope = scope;
 
     this.createAppMapJSON(
-      props.pipelineName,
+      props.pipelineName ?? 'ChildPipeline', // if no pipelineName is provided, default to 'ChildPipeline'
       props.affectedPaths,
       props.projectNames,
     );
@@ -78,65 +69,6 @@ export class ChildPipeline extends CodePipeline {
   //   });
   // };
 
-  // Adds a step to run after the stage is deployed using the credentials from the provided role via an assume role.
-  // This is usually for integration and e2e testing purposes.
-  // It sets LAMBDA_TASK_ROOT to a dummy value so this runs like a lambda would.
-  // commands are the commands to run AFTER the stage has been deployed
-  // testAssumeRole is the iam Role code build should use to run the commands - this role should have the necessary permissions to run the commands and allow codeBuild from the childPipeline's account to assume it
-  // envFromCfnOutputs - enables setting env variables from the outputs of the cfn stack if needed
-  // e.g. pipeline.addStepsToStage(testStage, ['npx nx run document-service:test'], testAssumeRole);
-  // or without nx: pipeline.addStepsToStage(testStage, ['npx jest --config jest.config.e2e.ts --runInBand'], testAssumeRole);
-  addStepsToStage = ({
-    stage,
-    commands,
-    testRoleARN,
-    installCommands,
-    envFromCfnOutputs,
-    env,
-    name,
-  }: {
-    stage: StageDeployment;
-    commands: string[];
-    testRoleARN: string;
-    installCommands?: string[];
-    envFromCfnOutputs?: Record<string, CfnOutput>;
-    env?: Record<string, string>;
-    name?: string;
-  }) => {
-    const stepName = name || 'Test';
-    stage.addPost(
-      new CodeBuildStep(stepName, {
-        commands: [
-          // install commands
-          ...(installCommands || []),
-          // assume role and export creds so we can run commands in the test stage
-          `export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s" \
-          $(aws sts assume-role \
-          --role-arn ${testRoleARN} \
-          --role-session-name CodeBuildAssumeRole \
-          --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" \
-          --output text))`,
-          // run the test commands
-          ...commands,
-        ],
-        env: {
-          ...env,
-          IS_CODEBUILD: 'true',
-          // add LAMBDA_TASK_ROOT so we think we're operating in a lambda
-          LAMBDA_TASK_ROOT: 'dummyvalue',
-        },
-        envFromCfnOutputs,
-        rolePolicyStatements: [
-          // allow codeBuild to assume the testRole
-          new PolicyStatement({
-            actions: ['sts:AssumeRole'],
-            resources: [testRoleARN],
-          }),
-        ],
-      }),
-    );
-  };
-
   // creates a AppMap JSON file that collected the AffectedPaths -> pipelineNames and projectNames -> pipelineNames so the Parent pipeline knows which pipes to execute for a given git commit
   private createAppMapJSON = (
     pipelineName: string,
@@ -145,7 +77,7 @@ export class ChildPipeline extends CodePipeline {
   ) => {
     const fileName = this.appMapFilePath;
     // either create or add to the 'dist/appMap.json' that stores the mapping
-    const appMap: AppMap = fs.existsSync(fileName)
+    const appMap: IAppMap = fs.existsSync(fileName)
       ? JSON.parse(fs.readFileSync(fileName, 'utf-8'))
       : {};
 

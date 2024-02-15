@@ -101,7 +101,19 @@
       "type": "bundled"
     },
     {
+      "name": "@aws-sdk/credential-provider-node",
+      "type": "bundled"
+    },
+    {
       "name": "@aws-sdk/credential-providers",
+      "type": "bundled"
+    },
+    {
+      "name": "minimatch",
+      "type": "bundled"
+    },
+    {
+      "name": "yargs",
       "type": "bundled"
     },
     {
