@@ -54,6 +54,9 @@ const project = new awscdk.AwsCdkConstructLibrary({
       testMatch: ['**/*.spec.ts'],
     },
   },
+  githubOptions: {
+    mergify: false,
+  }
 
   // deps: [],                /* Runtime dependencies of this module. */
   // description: undefined,  /* The description is just a string that helps people understand the purpose of the package. */
@@ -128,6 +131,50 @@ buildWorkflow.updateJob('build', {
         path: 'dist',
         overwrite: true,
       },
+    },
+  ],
+});
+
+const packagejsJob = buildWorkflow.getJob('package-js')! as Job;
+
+buildWorkflow.updateJob('package-js', {
+  ...packagejsJob,
+
+  steps: [
+    {
+      uses: 'actions/setup-node@v4',
+      with: {
+        'node-version': '18.x',
+      },
+    },
+    {
+      name: 'Download build artifacts',
+      uses: 'actions/download-artifact@v4',
+      with: {
+        name: 'build-artifact',
+        path: 'dist',
+      },
+    },
+    {
+      name: 'Restore build artifact permissions',
+      run: 'cd dist && setfacl --restore=permissions-backup.acl',
+      continueOnError: true,
+    },
+    {
+      name: 'Prepare Repository',
+      run: 'mv dist .repo',
+    },
+    {
+      name: 'Install Dependencies',
+      run: 'cd .repo && npm i -g bun && bun install --frozen-lockfile',
+    },
+    {
+      name: 'Create js artifact',
+      run: 'cd .repo && npx projen package:js',
+    },
+    {
+      name: 'Collect js Artifact',
+      run: 'mv .repo/dist dist',
     },
   ],
 });
