@@ -6,6 +6,7 @@ on:
   workflow_dispatch: {}
 jobs:
   build:
+    needs: install-dependencies
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -110,3 +111,14 @@ jobs:
         run: cd .repo && npx projen package:js
       - name: Collect js Artifact
         run: mv .repo/dist dist
+  install-dependencies:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18.x
+      - name: Install bun
+        run: npm i -g bun
