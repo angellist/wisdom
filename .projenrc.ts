@@ -62,20 +62,26 @@ project.addScripts({
 });
 const workflow = project.github!.workflows.find((wf) => wf.name === 'build')!;
 // new job just to install npm and bun that we'll require to run before the build
-const setupNodeStep = {
-  name: 'Setup Node.js',
-  uses: 'actions/setup-node@v4',
-  with: {
-    'node-version': '18.x',
-  },
-};
-const installBunStep = {
+// const setupNodeStep = {
+//   name: 'Setup Node.js',
+//   uses: 'actions/setup-node@v4',
+//   with: {
+//     'node-version': '18.x',
+//   },
+// };
+// const installBunStep = {
+//   name: 'Install bun',
+//   run: 'npm i -g bun',
+// };
+
+const standaloneInstallBun = {
   name: 'Install bun',
-  run: 'npm i -g bun',
+  run: 'curl https://bun.sh/install | bash',
 };
+
 const installDependenciesJob = {
   runsOn: ['ubuntu-latest'],
-  steps: [setupNodeStep, installBunStep],
+  steps: [standaloneInstallBun],
   permissions: {
     contents: JobPermission.WRITE,
   }
