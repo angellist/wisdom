@@ -37,6 +37,10 @@ const project = new awscdk.AwsCdkConstructLibrary({
     '@aws-sdk/client-codepipeline',
     'aws-cdk-lib@^2.96.0',
   ],
+  bundledDeps: [
+    '@aws-sdk/credential-providers',
+    '@aws-sdk/client-codepipeline',
+  ],
   // jest config
   jestOptions: {
     jestConfig: {
